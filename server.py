@@ -67,6 +67,8 @@ class Match:
             print(str(e)) #TODO should i do something else?
 
     def connect_clients(self):
+        global self.connected_clients # making it global so all of the other threads will get the modified version
+
         self.tcp_socket.listen() # listening for incoming clients
 
         num_of_connected_clients
@@ -86,10 +88,12 @@ class Match:
 
                 # info about each client is saved as follows:
                 # (<the client's index>, <the client's name>, <the client's socket>, <the client's address>, <the group the client's is assigned to>)
-                self.group_one.append((num_of_connected_clients, data_from_connected_client, client_socket, client_address, (random_numer % 2) + 1))                  
+                self.connected_clients.append((num_of_connected_clients, data_from_connected_client, client_socket, client_address, (random_numer % 2) + 1))                  
 
     # broadcasting invitations and waiting for clients to connect for self.queueing_duaration seconds
     def wait_for_clients(self):
+        global self.wait_for_clients # making it global so all of the other threads will get the modified version
+
         print("queueing started")
         # setting up the socket and the message to send over the broadcast
         udp_socket = socket(AF_INET, SOCK_DGRAM)
@@ -114,6 +118,10 @@ class Match:
     # each client's thread will run on this function
     # and it will manage its connection
     def playing_client(self, index, name, connection, address, group)
+        # making them global so all of the other threads will get the modified version
+        global self.group_one_score
+        global self.group_two_score
+        global self.connected_clients
         
         while self.mid_match:
             data = connection.recv(2048)
@@ -135,9 +143,7 @@ class Match:
             to_send = name + " typed: " + data_decoded
             for client in self.connected_clients
                 client[SOCKET].sendall(str.encode(to_send))
-            
-
-        
+             
     def welcoming_message_constructor(self):
         welcoming_message = "Welcome to Keyboard Spamming Battle Royale.\n"
         
@@ -153,6 +159,8 @@ class Match:
         
     # starting the match for self.match_duration seconds
     def start_game(self):
+        global self.mid_match # making it global so all of the other threads will get the modified version
+
         print("match started")
         self.mid_match = True
 
@@ -204,7 +212,7 @@ class Match:
         # sending to every connected client the summary message and closing their connection
         for client in self.connect_clients:
             client[SOCKET].sendall(str.encode(summary_message))
-            client[SOCKET].close()
+            client[SOCKET].close() # all of the other threads should've terminated by now so it would not cause any problem to them
     
 
 print("Server started, listening on IP address 172.1.0.71 (might need to be more abstract meaning get the ip at runtime)")
