@@ -35,7 +35,7 @@ class Game:
 
             if event.type == pygame.KEYDOWN:  # the client hit the keyboard
                 self.text = concat_char(self.text, pygame.key.name(event.key))
-                self.client.tcp_socket.send(f'{pygame.key.name(event.key)}\n')  # send the character to server
+                self.client.tcp_socket.send(f'{pygame.key.name(event.key)}\n'.encode('utf-8'))  # send the character to server
 
                 if len(self.text) == 250:
                     self.current_text_height += 20
@@ -60,7 +60,7 @@ class Game:
         This function receives a message from the server in non-blocking manner.
         if a message received it will be concatenate to the previous messages.
         """
-        msg = self.client.tcp_socket.recv(128)
+        msg = self.client.tcp_socket.recv(128).decode('utf-8')
         self.opponent_text = concat_char(self.text, msg)
 
         if len(self.opponent_text) == 250:

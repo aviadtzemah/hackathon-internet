@@ -26,7 +26,7 @@ class Client:
         broadcast_msg, (hostIP, _port) = udp_socket.recvfrom(2048)
 
         udp_socket.close()  # close the connection of the UDP socket
-        return hostIP, broadcast_msg
+        return hostIP, broadcast_msg.decode('utf-8')
 
     def extract_port(self, broadcast_msg):
         """
@@ -72,7 +72,7 @@ class Client:
         """
         The game is starting- the client can insert keys for the duration of 10 seconds.
         """
-        welcome_msg = self.tcp_socket.recv(2048)
+        welcome_msg = self.tcp_socket.recv(2048).decode('utf-8')
         print(welcome_msg)  # print the welcome message
 
         self.tcp_socket.setblocking(False)  # set the socket to non-blocking
@@ -81,7 +81,7 @@ class Client:
         game.run()
 
         self.tcp_socket.setblocking(True)  # set the socket to blocking
-        results = self.tcp_socket.recv(128)
+        results = self.tcp_socket.recv(128).decode('utf-8')
         print(f'Results:\n{results}')  # print the game results
 
         self.tcp_socket.close()
