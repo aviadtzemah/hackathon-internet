@@ -80,6 +80,10 @@ class Client:
 
         game.run()
 
+        self.tcp_socket.setblocking(True)  # set the socket to blocking
+        results = self.tcp_socket.recv(128)
+        print(f'Results:\n{results}')  # print the game results
+
         self.tcp_socket.close()
         print('Server disconnected, listening for offer requests...')
 
