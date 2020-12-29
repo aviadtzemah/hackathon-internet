@@ -9,7 +9,6 @@ import termios
 def is_data():
     return select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], [])
 
-
 class Client:
     """
     This class implements the states of a client:
@@ -31,10 +30,9 @@ class Client:
         udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # creating UDP socket
         udp_socket.bind(('', UDP_PORT))  # bind the socket to a specific port
 
-        hostIP = ''
         broadcast_msg = ''
-        while hostIP != b'\xfe\xed\xbe\xef\x02\x08\x1d':
-            (broadcast_msg, hostIP) = udp_socket.recvfrom(2048)
+        
+        broadcast_msg, (hostIP, _port) = udp_socket.recvfrom(2048)
 
         udp_socket.close()  # close the connection of the UDP socket
         return hostIP, broadcast_msg
@@ -47,16 +45,16 @@ class Client:
         """
 
         try:
-            unpacked_msg = struct.unpack('>lch', broadcast_msg)  # unpacking message in format (long, char, short) big-endian
+            unpacked_msg = struct.unpack('>IcH', broadcast_msg)  # unpacking message in format (long, char, short)
         except struct.error:
             print('failed to unpack message -> illegal message')
             return -1
 
         if unpacked_msg[0] != 0xfeedbeef:
-            print(f'wrong magic cookie - expected to FEED BEEF and not {unpacked_msg[0]}')
+            print(f'wrong magic cookie - expected to {0xfeedbeef} and not {unpacked_msg[0]}')
             return -1
 
-        if unpacked_msg[1] != 0x2:
+        if unpacked_msg[1] != b'\x02':
             print(f'wrong message type - 0x2 != {unpacked_msg[1]}')
             return -1
 
@@ -68,16 +66,19 @@ class Client:
         If it succeeds return True. otherwise, False.
         """
         print(f'Received offer from {hostIP}, attempting to connect...')
+        is_connected = True
 
         self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # creating TCP socket
         try:
+            print(tcp_port)
             self.tcp_socket.connect((hostIP, tcp_port))
         except socket.error:
             print(f'Failed to connect to server at address {hostIP} and port {tcp_port}')
-            return False
+            is_connected = False
 
-        self.tcp_socket.send(f'{self.team_name}\n'.encode('utf-8'))  # send the team name
-        return True
+        if is_connected:
+            self.tcp_socket.send(f'{self.team_name}\n'.encode('utf-8'))  # send the team name
+        return is_connected
 
     def play(self):
         """
@@ -97,7 +98,7 @@ class Client:
             while 'Game over' not in msg:
                 if is_data():
                     char = sys.stdin.read(1)
-                    self.tcp_socket.send(f'{char}\n'.encode('utf-8'))
+                    self.tcp_socket.send(f'{char}'.encode('utf-8'))
 
                 try:
                     recv_msg = self.tcp_socket.recv(2048)
@@ -120,7 +121,7 @@ if __name__ == "__main__":
         client = Client(team_name='Ribon_Ha_Olamim')
         host, msg = client.find_server()
         port = client.extract_port(msg)
-
+        
         if port != -1:
             is_connected = client.connect(host, port)
 
