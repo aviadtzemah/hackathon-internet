@@ -1,5 +1,13 @@
 import socket
 import struct
+import sys
+import select
+import tty
+import termios
+
+
+def is_data():
+    return select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], [])
 
 
 class Client:
@@ -29,7 +37,7 @@ class Client:
             (broadcast_msg, hostIP) = udp_socket.recvfrom(2048)
 
         udp_socket.close()  # close the connection of the UDP socket
-        return hostIP, broadcast_msg.decode('utf-8')
+        return hostIP, broadcast_msg
 
     def extract_port(self, broadcast_msg):
         """
@@ -39,7 +47,7 @@ class Client:
         """
 
         try:
-            unpacked_msg = struct.unpack('lch', broadcast_msg)  # unpacking message in format (long, char, short)
+            unpacked_msg = struct.unpack('>lch', broadcast_msg)  # unpacking message in format (long, char, short) big-endian
         except struct.error:
             print('failed to unpack message -> illegal message')
             return -1
@@ -81,20 +89,24 @@ class Client:
         self.tcp_socket.setblocking(False)  # set the socket to non-blocking
         
         msg = ''
-        while 'Game over' not in msg:
-            char = input("Enter a key: ")[0]
-            self.tcp_socket.send(f'{char}\n'.encode('utf-8'))
+        old_settings = termios.tcgetattr(sys.stdin)
 
-            try:
-                recv_msg = self.tcp_socket.recv(2048)
-                msg = recv_msg.decode('utf-8')
-                print(msg)
-            except socket.error:
-                msg = ''
+        try:
+            tty.setcbreak(sys.stdin.fileno())
 
-        # self.tcp_socket.setblocking(True)  # set the socket to blocking
-        # results = self.tcp_socket.recv(128).decode('utf-8')
-        # print(f'Results:\n{results}')  # print the game results
+            while 'Game over' not in msg:
+                if is_data():
+                    char = sys.stdin.read(1)
+                    self.tcp_socket.send(f'{char}\n'.encode('utf-8'))
+
+                try:
+                    recv_msg = self.tcp_socket.recv(2048)
+                    msg = recv_msg.decode('utf-8')
+                    print(msg)
+                except socket.error:
+                    msg = ''
+        finally:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
 
         self.tcp_socket.close()
         print('Server disconnected, listening for offer requests...')
