@@ -1,6 +1,5 @@
 import socket
 import struct
-from game import Game
 
 
 class Client:
@@ -23,7 +22,11 @@ class Client:
         UDP_PORT = 13117
         udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # creating UDP socket
         udp_socket.bind(('', UDP_PORT))  # bind the socket to a specific port
-        broadcast_msg, (hostIP, _port) = udp_socket.recvfrom(2048)
+
+        hostIP = ''
+        broadcast_msg = ''
+        while hostIP != b'\xfe\xed\xbe\xef\x02\x08\x1d':
+            (broadcast_msg, hostIP) = udp_socket.recvfrom(2048)
 
         udp_socket.close()  # close the connection of the UDP socket
         return hostIP, broadcast_msg.decode('utf-8')
@@ -58,14 +61,14 @@ class Client:
         """
         print(f'Received offer from {hostIP}, attempting to connect...')
 
-        tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # creating TCP socket
+        self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # creating TCP socket
         try:
-            tcp_socket.connect((hostIP, tcp_port))
+            self.tcp_socket.connect((hostIP, tcp_port))
         except socket.error:
             print(f'Failed to connect to server at address {hostIP} and port {tcp_port}')
             return False
 
-        tcp_socket.send(f'{self.team_name}\n'.encode('utf-8'))  # send the team name
+        self.tcp_socket.send(f'{self.team_name}\n'.encode('utf-8'))  # send the team name
         return True
 
     def play(self):
@@ -76,13 +79,22 @@ class Client:
         print(welcome_msg)  # print the welcome message
 
         self.tcp_socket.setblocking(False)  # set the socket to non-blocking
-        game = Game(self)
+        
+        msg = ''
+        while 'Game over' not in msg:
+            char = input("Enter a key: ")[0]
+            self.tcp_socket.send(f'{char}\n'.encode('utf-8'))
 
-        game.run()
+            try:
+                recv_msg = self.tcp_socket.recv(2048)
+                msg = recv_msg.decode('utf-8')
+                print(msg)
+            except socket.error:
+                msg = ''
 
-        self.tcp_socket.setblocking(True)  # set the socket to blocking
-        results = self.tcp_socket.recv(128).decode('utf-8')
-        print(f'Results:\n{results}')  # print the game results
+        # self.tcp_socket.setblocking(True)  # set the socket to blocking
+        # results = self.tcp_socket.recv(128).decode('utf-8')
+        # print(f'Results:\n{results}')  # print the game results
 
         self.tcp_socket.close()
         print('Server disconnected, listening for offer requests...')
