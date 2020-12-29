@@ -5,19 +5,6 @@ import random
 import struct
 import scapy
 
-INDEX = 0
-NAME = 1
-SOCKET = 2
-ADDRESS = 3
-GROUP = 4
-
-BLUE = '0;34;40m'
-RED = '0;31;40m'
-
-best_score = 0
-
-
-
 class Match:
 
     """
@@ -54,6 +41,8 @@ class Match:
 
         self.waiting_for_connections = True
         self.mid_match = False
+
+        self.chars_frequency = {}
 
     # the main flow of the match
     def start_match(self):
@@ -123,7 +112,7 @@ class Match:
 
         udp_socket.close()
 
-        self.waiting_for_connections = False
+        self.waiting_for_connections = False  
 
     # each client's thread will run on this function
     # and it will manage its connection
@@ -144,6 +133,10 @@ class Match:
                 self.group_one_score += len(data_decoded)
             else:
                 self.group_two_score += len(data_decoded)
+
+            # update letters freqency
+            for char in data_decoded:
+                self.chars_frequency[char] += 1
 
             # sending the data this user sent to all of the connections
 
@@ -197,20 +190,46 @@ class Match:
         summary_message += ("Group 2 typed in " +
                             str(self.group_two_score) + ".\n")
 
+        winning_team = ''
+
         if self.group_one_score == self.group_two_score:
             summary_message += "It's a tie!\n"
         elif self.group_one_score > self.group_two_score:
             summary_message += "Group 1 wins!\n==\n"
 
+            if self.group_one_score > best_score_ever:
+                best_score_ever = self.group_one_score
+
             for client in self.connected_clients:
                 if client[GROUP] == 1:
-                    summary_message += client[1]
+                    winning_team += client[1]
+
+            summary_message += winning_team
+
+            if self.group_two_score > best_score_ever: # also checking if the winning team surpassed the all time best team
+                best_score_ever = self.group_one_score
+                best_score_team_name = winning_team
+
         else:
             summary_message += "Group 2 wins!\n==\n"
 
             for client in self.connected_clients:
                 if client[GROUP] == 2:
-                    summary_message += client[1]
+                    winning_team += client[1]
+
+            summary_message += winning_team
+
+            if self.group_two_score > best_score_ever: # also checking if the winning team surpassed the all time best team
+                best_score_ever = self.group_two_score
+                best_score_team_name = winning_team
+
+        summary_message += '\nThe best team who played on this server were:\n' + best_score_team_name + "With a score of {0}!".format(best_score_ever)      
+
+        summary_message += '\nThe five most common characters are:\n'
+        for i in range(5):
+            key = max(self.chars_frequency, key=self.chars_frequency.get)
+            summary_message += str(i + 1) + '. ' + key + ': ' + self.chars_frequency[key]
+            del self.chars_frequency[key][key]
 
         return summary_message
 
@@ -228,15 +247,28 @@ class Match:
             # all of the other threads should've terminated by now so it would not cause any problem to them
             client[SOCKET].close()
 
-
+# TODO need the ip on runtime
 print("Server started, listening on IP address 172.1.0.71 (might need to be more abstract meaning get the ip at runtime)")
 
+#server args
 past_matches = []  # will save all the instances of the past matches
 broadcast_port = 13117  # the port we are going to send the broadcast to
 host = '172.1.0.71'
 port = 2078
 queue_time = 10
 match_time = 10
+
+INDEX = 0
+NAME = 1
+SOCKET = 2
+ADDRESS = 3
+GROUP = 4
+
+BLUE = '0;34;40m'
+RED = '0;31;40m'
+
+best_score_team_name = ''
+best_score_ever = 0
 
 """
 the main loop of the server.
@@ -259,11 +291,4 @@ try:
     
 except error as e:
     print(f'failed to bind the socket: {str(e)}')
-
-
-
-
-
-
-
 
