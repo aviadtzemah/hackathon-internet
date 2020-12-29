@@ -29,10 +29,10 @@ class Client:
         UDP_PORT = 13117
         udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # creating UDP socket
         udp_socket.bind(('', UDP_PORT))  # bind the socket to a specific port
-
-        broadcast_msg = ''
         
-        broadcast_msg, (hostIP, _port) = udp_socket.recvfrom(2048)
+        broadcast_msg = ''
+        while broadcast_msg != b'\xfe\xed\xbe\xef\x02\x08\x1e':
+            broadcast_msg, (hostIP, _port) = udp_socket.recvfrom(2048)
 
         udp_socket.close()  # close the connection of the UDP socket
         return hostIP, broadcast_msg
@@ -70,7 +70,6 @@ class Client:
 
         self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # creating TCP socket
         try:
-            print(tcp_port)
             self.tcp_socket.connect((hostIP, tcp_port))
         except socket.error:
             print(f'Failed to connect to server at address {hostIP} and port {tcp_port}')

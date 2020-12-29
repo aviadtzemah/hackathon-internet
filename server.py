@@ -11,6 +11,12 @@ SOCKET = 2
 ADDRESS = 3
 GROUP = 4
 
+BLUE = '0;34;40m'
+RED = '0;31;40m'
+
+best_score = 0
+
+
 
 class Match:
 
@@ -79,6 +85,8 @@ class Match:
                 else:  # else add the client to the list of connected clients
                     random_numer = random.randint(0, 100)
 
+                    print(random_numer)
+
                     # info about each client is saved as follows:
                     # (<the client's index>, <the client's name>, <the client's socket>, <the client's address>, <the group the client's is assigned to>)
                     self.connected_clients.append(
@@ -138,7 +146,12 @@ class Match:
                 self.group_two_score += len(data_decoded)
 
             # sending the data this user sent to all of the connections
-            to_send = name + " typed: " + data_decoded
+
+            if group == 1: # if the client is in group 1, his text colour will be blue
+                to_send = '\x1b[' + BLUE + name[:-1] + " typed: " + data_decoded + '\x1b[0m'
+            else: # else his colour is red
+                to_send = '\x1b[' + RED + name[:-1] + " typed: " + data_decoded + '\x1b[0m'
+            
             for client in self.connected_clients:
                 client[SOCKET].sendall(str.encode(to_send))
 
