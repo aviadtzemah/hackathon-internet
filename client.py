@@ -30,9 +30,7 @@ class Client:
         udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # creating UDP socket
         udp_socket.bind(('', UDP_PORT))  # bind the socket to a specific port
         
-        broadcast_msg = ''
-        while broadcast_msg != b'\xfe\xed\xbe\xef\x02\x08\x1e':
-            broadcast_msg, (hostIP, _port) = udp_socket.recvfrom(2048)
+        broadcast_msg, (hostIP, _port) = udp_socket.recvfrom(2048)
 
         udp_socket.close()  # close the connection of the UDP socket
         return hostIP, broadcast_msg

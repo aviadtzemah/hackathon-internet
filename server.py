@@ -1,9 +1,9 @@
 import time
-from socket import *
+import socket
 import threading
 import random
 import struct
-import scapy
+from scapy.all import *
 
 class Match:
 
@@ -42,7 +42,7 @@ class Match:
         self.waiting_for_connections = True
         self.mid_match = False
 
-        self.chars_frequency = {}
+        # self.chars_frequency = {}
 
     # the main flow of the match
     def start_match(self):
@@ -74,24 +74,25 @@ class Match:
                 else:  # else add the client to the list of connected clients
                     random_numer = random.randint(0, 100)
 
-                    print(random_numer)
+                    # print(random_numer)
 
                     # info about each client is saved as follows:
                     # (<the client's index>, <the client's name>, <the client's socket>, <the client's address>, <the group the client's is assigned to>)
                     self.connected_clients.append(
                         (num_of_connected_clients, name_of_the_client, client_socket, client_address, (random_numer % 2) + 1))
-            except timeout:
-                pass
+            except socket.timeout:
+                print("timeout on accepting new clients")
+
 
     # broadcasting invitations and waiting for clients to connect for self.queueing_duaration seconds
     def wait_for_clients(self):
 
         print("queueing started")
         # setting up the socket and the message to send over the broadcast
-        udp_socket = socket(AF_INET, SOCK_DGRAM)
-        udp_socket.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
+        udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
-        message = b'\xfe\xed\xbe\xef\x02\x08\x1e'
+        message = b'\xfe\xed\xbe\xef\x02\x08\x1d' # port is 081d which is 2077
 
         # from when we are starting to count self.queueing_duration seconds
         stop_queue_reference_time = time.time()
@@ -175,10 +176,10 @@ class Match:
             threading.Thread(target=self.playing_client, args=(
                 (client[INDEX], client[NAME], client[SOCKET], client[ADDRESS], client[GROUP]))).start()
 
-        reference_time = time.time()
-
-        while time.time() - reference_time < self.match_duration:
-            pass
+        #reference_time = time.time()
+        # while time.time() - reference_time < self.match_duration:
+        #     pass
+        time.sleep(10)
 
         self.mid_match = False
 
@@ -197,8 +198,8 @@ class Match:
         elif self.group_one_score > self.group_two_score:
             summary_message += "Group 1 wins!\n==\n"
 
-            if self.group_one_score > best_score_ever:
-                best_score_ever = self.group_one_score
+            # if self.group_one_score > best_score_ever:
+            #     best_score_ever = self.group_one_score
 
             for client in self.connected_clients:
                 if client[GROUP] == 1:
@@ -206,9 +207,9 @@ class Match:
 
             summary_message += winning_team
 
-            if self.group_two_score > best_score_ever: # also checking if the winning team surpassed the all time best team
-                best_score_ever = self.group_one_score
-                best_score_team_name = winning_team
+            # if self.group_two_score > best_score_ever: # also checking if the winning team surpassed the all time best team
+            #     best_score_ever = self.group_one_score
+            #     best_score_team_name = winning_team
 
         else:
             summary_message += "Group 2 wins!\n==\n"
@@ -219,17 +220,17 @@ class Match:
 
             summary_message += winning_team
 
-            if self.group_two_score > best_score_ever: # also checking if the winning team surpassed the all time best team
-                best_score_ever = self.group_two_score
-                best_score_team_name = winning_team
+            # if self.group_two_score > best_score_ever: # also checking if the winning team surpassed the all time best team
+            #     best_score_ever = self.group_two_score
+            #     best_score_team_name = winning_team
 
-        summary_message += '\nThe best team who played on this server were:\n' + best_score_team_name + "With a score of {0}!".format(best_score_ever)      
+        # summary_message += '\nThe best team who played on this server were:\n' + best_score_team_name + "With a score of {0}!".format(best_score_ever)      
 
-        summary_message += '\nThe five most common characters are:\n'
-        for i in range(5):
-            key = max(self.chars_frequency, key=self.chars_frequency.get)
-            summary_message += str(i + 1) + '. ' + key + ': ' + self.chars_frequency[key]
-            del self.chars_frequency[key][key]
+        # summary_message += '\nThe five most common characters are:\n'
+        # for i in range(5):
+        #     key = max(self.chars_frequency, key=self.chars_frequency.get)
+        #     summary_message += str(i + 1) + '. ' + key + ': ' + self.chars_frequency[key]
+        #     del self.chars_frequency[key][key]
 
         return summary_message
 
@@ -248,13 +249,16 @@ class Match:
             client[SOCKET].close()
 
 # TODO need the ip on runtime
-print("Server started, listening on IP address 172.1.0.71 (might need to be more abstract meaning get the ip at runtime)")
+
+address = get_if_addr("eth1")
+# print(address)
+
+print("Server started, listening on IP address {0}".format(address))
 
 #server args
 past_matches = []  # will save all the instances of the past matches
 broadcast_port = 13117  # the port we are going to send the broadcast to
-host = '172.1.0.71'
-port = 2078
+port = 2077
 queue_time = 10
 match_time = 10
 
@@ -267,18 +271,18 @@ GROUP = 4
 BLUE = '0;34;40m'
 RED = '0;31;40m'
 
-best_score_team_name = ''
-best_score_ever = 0
+# best_score_team_name = ''
+# best_score_ever = 0
 
 """
 the main loop of the server.
 each loop we are creating a new match, starting it and at the end saving its instace.
 """
-tcp_socket_for_server = socket(AF_INET, SOCK_STREAM)
-tcp_socket_for_server.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+tcp_socket_for_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+tcp_socket_for_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
 try:
-    tcp_socket_for_server.bind(('172.18.0.71', port))
+    tcp_socket_for_server.bind((address, port))
     tcp_socket_for_server.listen()  # listening for incoming clients
     tcp_socket_for_server.settimeout(queue_time)
     
