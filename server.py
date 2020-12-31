@@ -1,31 +1,26 @@
 import time
-import socket
+from socket import *
 import threading
 import random
 import struct
-from scapy.all import *
+import scapy.all as scapy
 
 class Match:
 
     """
-    TODO fix the documentaion here
     constructor parameters:
-
     queueing_duration - how long are we going to wait for clients to connect
     match_duration - how long the match will be
     broadcast_port - on what port are we going to broadcast the invitations for the match
-    host - the server ip
-    server_port - the server's tcp port connection
     tcp_socket - the tcp socket of the server
 
     connected_clients - info about the connected clients
 
     group_one_score - the score of group one
     group_two_score - the score of group two
-
+   
     waiting_for_connections - determines if we still accept new clients
     mid_match - determins if we are currently mid game
-
     """
 
     def __init__(self, queueing_duration, match_duration, broadcast_port, tcp_socket):
@@ -41,8 +36,6 @@ class Match:
 
         self.waiting_for_connections = True
         self.mid_match = False
-
-        # self.chars_frequency = {}
 
     # the main flow of the match
     def start_match(self):
@@ -62,11 +55,12 @@ class Match:
         while self.waiting_for_connections:
             try:
                 client_socket, client_address = self.tcp_socket.accept()  # accepting a new client
+                client_socket.settimeout(1) # setting a timeout on the clients' sockets or else their theard wouldn't terminate when the match ends
                 num_of_connected_clients += 1
                 print("accepted connection from {0}".format(client_address))
 
                 # i am assuming they will send the name and only the name
-                name_of_the_client = client_socket.recv(2048).decode('utf-8')
+                name_of_the_client = client_socket.recv(RECIEVE_BUFFER_SIZE).decode('utf-8')
 
                 if not name_of_the_client:  # in case something happened and the client was lost, close the connection
                     num_of_connected_clients -= 1
@@ -74,86 +68,94 @@ class Match:
                 else:  # else add the client to the list of connected clients
                     random_numer = random.randint(0, 100)
 
-                    # print(random_numer)
+                    print(random_numer)
 
                     # info about each client is saved as follows:
                     # (<the client's index>, <the client's name>, <the client's socket>, <the client's address>, <the group the client's is assigned to>)
                     self.connected_clients.append(
-                        (num_of_connected_clients, name_of_the_client, client_socket, client_address, (random_numer % 2) + 1))
-            except socket.timeout:
-                print("timeout on accepting new clients")
-
+                        [num_of_connected_clients-1, name_of_the_client, client_socket, client_address, (random_numer % 2) + 1])
+            except timeout:
+                pass
 
     # broadcasting invitations and waiting for clients to connect for self.queueing_duaration seconds
     def wait_for_clients(self):
 
         print("queueing started")
         # setting up the socket and the message to send over the broadcast
-        udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        udp_socket = socket(AF_INET, SOCK_DGRAM)
+        udp_socket.bind((address, self.broadcast_port+1))
+        udp_socket.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
 
-        message = b'\xfe\xed\xbe\xef\x02\x08\x1d' # port is 081d which is 2077
+        message = b'\xfe\xed\xbe\xef\x02\x08\x1d' # the port is 0x081d which is 2077 in hexa
 
         # from when we are starting to count self.queueing_duration seconds
         stop_queue_reference_time = time.time()
 
         # from when we are waiting 1 second to send another broadcast
         send_reference_time = time.time()
-
         print("sending broadcast")
-        udp_socket.sendto(message, ('255.255.255.255', self.broadcast_port))
+        udp_socket.sendto(message, ('<broadcast>', self.broadcast_port))
 
         while time.time() - stop_queue_reference_time < self.queueing_duration:
 
-            if time.time() - send_reference_time > 1:
+            if time.time() - send_reference_time > 1: # sending a broadcacst each second
                 print("sending broadcast")
-                udp_socket.sendto(
-                    message, ('255.255.255.255', self.broadcast_port))
+                udp_socket.sendto(message, ('<broadcast>', self.broadcast_port))
                 send_reference_time = time.time()
 
         udp_socket.close()
 
-        self.waiting_for_connections = False  
+        self.waiting_for_connections = False
 
     # each client's thread will run on this function
     # and it will manage its connection
     def playing_client(self, index, name, connection, address, group):
 
         while self.mid_match:
-            data = connection.recv(2048)
+            tmout = False
+            try:
+                data = connection.recv(RECIEVE_BUFFER_SIZE)
+            except timeout:
+                tmout = True
 
-            if not data:  # in case the client disconnected
-                del self.connected_clients[INDEX]
-                connection.close()
-                break
+            # checking if a timeout occured
+            if not tmout:
+                if not data:  # in case the client disconnected
+                    print("client disconnected")
+                    for client in self.connected_clients:
+                        if index > client[INDEX]:
+                            client[INDEX] -= 1
 
-            data_decoded = data.decode('utf-8')
+                    del self.connected_clients[index]
+                    connection.close()
+                    break
 
-            # checking to which group give the score
-            if group == 1:
-                self.group_one_score += len(data_decoded)
-            else:
-                self.group_two_score += len(data_decoded)
+                data_decoded = data.decode('utf-8')
 
-            # update letters freqency
-            for char in data_decoded:
-                self.chars_frequency[char] += 1
+                # checking to which group give the score
+                if group == 1:
+                    self.group_one_score += len(data_decoded)
+                else:
+                    self.group_two_score += len(data_decoded)
 
-            # sending the data this user sent to all of the connections
+                # sending the data this user sent to all of the connections
 
-            if group == 1: # if the client is in group 1, his text colour will be blue
-                to_send = '\x1b[' + BLUE + name[:-1] + " typed: " + data_decoded + '\x1b[0m'
-            else: # else his colour is red
-                to_send = '\x1b[' + RED + name[:-1] + " typed: " + data_decoded + '\x1b[0m'
-            
-            for client in self.connected_clients:
-                client[SOCKET].sendall(str.encode(to_send))
+                if group == 1: # if the client is in group 1, his text colour will be blue
+                    to_send = '\x1b[' + BLUE + name[:-1] + " typed: " + data_decoded + '\x1b[0m'
+                else: # else his colour is red
+                    to_send = '\x1b[' + RED + name[:-1] + " typed: " + data_decoded + '\x1b[0m'
+                
+                for client in self.connected_clients:
+                    client[SOCKET].sendall(str.encode(to_send))
+        
+        print("done")
 
     def welcoming_message_constructor(self):
         welcoming_message = "Welcome to Keyboard Spamming Battle Royale.\n"
 
         group_one_memebers = "Group 1:\n==\n"
         group_two_memebers = "Group 2:\n==\n"
+        # building the groups strs
         for client in self.connected_clients:
             if client[GROUP] == 1:
                 group_one_memebers += client[1]
@@ -167,21 +169,28 @@ class Match:
 
         print("match started")
         self.mid_match = True
-
+        
+        thread_lst = []
         # sending to each client the welcoming message
         # and then starting the threads of each connected client
         welcoming_message = self.welcoming_message_constructor()
         for client in self.connected_clients:
             client[SOCKET].sendall(str.encode(welcoming_message))
-            threading.Thread(target=self.playing_client, args=(
-                (client[INDEX], client[NAME], client[SOCKET], client[ADDRESS], client[GROUP]))).start()
+            # saving the instance of the threads 
+            t = threading.Thread(target=self.playing_client, args=(
+                (client[INDEX], client[NAME], client[SOCKET], client[ADDRESS], client[GROUP])))
+            thread_lst.append(t)
+            t.start()
 
-        #reference_time = time.time()
-        # while time.time() - reference_time < self.match_duration:
-        #     pass
         time.sleep(10)
 
         self.mid_match = False
+
+        # the main threads is waiting for all the playing threads to terminate
+        for t in thread_lst:
+            t.join()
+
+        print("all terminated")
 
     def construct_summary_message(self):
         summary_message = "Game over! "
@@ -191,46 +200,21 @@ class Match:
         summary_message += ("Group 2 typed in " +
                             str(self.group_two_score) + ".\n")
 
-        winning_team = ''
-
+        # checking who's the winner
         if self.group_one_score == self.group_two_score:
             summary_message += "It's a tie!\n"
         elif self.group_one_score > self.group_two_score:
             summary_message += "Group 1 wins!\n==\n"
 
-            # if self.group_one_score > best_score_ever:
-            #     best_score_ever = self.group_one_score
-
             for client in self.connected_clients:
                 if client[GROUP] == 1:
-                    winning_team += client[1]
-
-            summary_message += winning_team
-
-            # if self.group_two_score > best_score_ever: # also checking if the winning team surpassed the all time best team
-            #     best_score_ever = self.group_one_score
-            #     best_score_team_name = winning_team
-
+                    summary_message += client[1]
         else:
             summary_message += "Group 2 wins!\n==\n"
 
             for client in self.connected_clients:
                 if client[GROUP] == 2:
-                    winning_team += client[1]
-
-            summary_message += winning_team
-
-            # if self.group_two_score > best_score_ever: # also checking if the winning team surpassed the all time best team
-            #     best_score_ever = self.group_two_score
-            #     best_score_team_name = winning_team
-
-        # summary_message += '\nThe best team who played on this server were:\n' + best_score_team_name + "With a score of {0}!".format(best_score_ever)      
-
-        # summary_message += '\nThe five most common characters are:\n'
-        # for i in range(5):
-        #     key = max(self.chars_frequency, key=self.chars_frequency.get)
-        #     summary_message += str(i + 1) + '. ' + key + ': ' + self.chars_frequency[key]
-        #     del self.chars_frequency[key][key]
+                    summary_message += client[1]
 
         return summary_message
 
@@ -248,38 +232,35 @@ class Match:
             # all of the other threads should've terminated by now so it would not cause any problem to them
             client[SOCKET].close()
 
-# TODO need the ip on runtime
-
-address = get_if_addr("eth1")
-# print(address)
-
+# server arguments
+address = scapy.get_if_addr("eth1")
 print("Server started, listening on IP address {0}".format(address))
 
-#server args
-past_matches = []  # will save all the instances of the past matches
-broadcast_port = 13117  # the port we are going to send the broadcast to
-port = 2077
-queue_time = 10
-match_time = 10
-
-INDEX = 0
+# kind of enums for accessing the connected_clients tuples
+INDEX = 0 
 NAME = 1
 SOCKET = 2
 ADDRESS = 3
 GROUP = 4
 
+# colors of each group. group 1 is blue, group 2 is red
 BLUE = '0;34;40m'
 RED = '0;31;40m'
 
-# best_score_team_name = ''
-# best_score_ever = 0
+# server general paramerters
+past_matches = []  # will save all the instances of the past matches
+broadcast_port = 13117  # the port we are going to send the broadcast to
+port = 2077
+queue_time = 10
+match_time = 10
+RECIEVE_BUFFER_SIZE = 2048
 
 """
 the main loop of the server.
 each loop we are creating a new match, starting it and at the end saving its instace.
 """
-tcp_socket_for_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-tcp_socket_for_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+tcp_socket_for_server = socket(AF_INET, SOCK_STREAM)
+tcp_socket_for_server.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
 
 try:
     tcp_socket_for_server.bind((address, port))
@@ -295,4 +276,3 @@ try:
     
 except error as e:
     print(f'failed to bind the socket: {str(e)}')
-

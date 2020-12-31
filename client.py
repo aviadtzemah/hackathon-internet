@@ -29,9 +29,9 @@ class Client:
         UDP_PORT = 13117
         udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # creating UDP socket
         udp_socket.bind(('', UDP_PORT))  # bind the socket to a specific port
-        
-        broadcast_msg, (hostIP, _port) = udp_socket.recvfrom(2048)
 
+        broadcast_msg, (hostIP, _port) = udp_socket.recvfrom(RECIEVE_BUFFER_SIZE)
+        
         udp_socket.close()  # close the connection of the UDP socket
         return hostIP, broadcast_msg
 
@@ -81,7 +81,7 @@ class Client:
         """
         The game is starting- the client can insert keys for the duration of 10 seconds.
         """
-        welcome_msg = self.tcp_socket.recv(2048).decode('utf-8')
+        welcome_msg = self.tcp_socket.recv(RECIEVE_BUFFER_SIZE).decode('utf-8')
         print(welcome_msg)  # print the welcome message
 
         self.tcp_socket.setblocking(False)  # set the socket to non-blocking
@@ -98,7 +98,7 @@ class Client:
                     self.tcp_socket.send(f'{char}'.encode('utf-8'))
 
                 try:
-                    recv_msg = self.tcp_socket.recv(2048)
+                    recv_msg = self.tcp_socket.recv(RECIEVE_BUFFER_SIZE)
                     msg = recv_msg.decode('utf-8')
                     print(msg)
                 except socket.error:
@@ -111,6 +111,8 @@ class Client:
 
 
 if __name__ == "__main__":
+
+    RECIEVE_BUFFER_SIZE = 2048
 
     print('Client started, listening for offer requests...')
 
